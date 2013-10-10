@@ -105,7 +105,7 @@ for jj=1:cyc
 				Vxy(:,:,kk) = Vxy(:,:,kk) - addOn * eye(mm+nn) ;
 			end
 		end
-       Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));
+        Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));
     end
    
 
