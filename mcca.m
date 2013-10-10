@@ -65,7 +65,7 @@ Muy = Muy + randn(K, mm)*sqrtm(cY);
 %initialize hidden parameters
 G=zeros(N, K); %posterior probabilties  p(k|x_i)
 Ez = zeros(N,d,K);  % E(z_{i,k})
-Ezz = zeros(d,d, K);  % E(z_{i,k}z_{i,k}')
+% Ezz = zeros(d,d, K);  % E(z_{i,k}z_{i,k}')
 %Vzz = zeros(d,d,K);
 
 Vxy  = zeros(mm+nn, mm+nn, K);
@@ -153,14 +153,16 @@ for jj=1:cyc
         GkM = repmat(Gk, 1, d+1);
 		Gzz = zeros(d+1, d+1) ;
 		
-		for indexSample = 1 : N
+		parfor indexSample = 1 : N
 			%% E-step %%
 			zik  = WPik*[X(:, indexSample)- Mux(kk,:)'; Y(:, indexSample)- Muy(kk,:)']; %mean for p(z|x_i,y_i,k)
             Ez(indexSample,:,kk) = zik;
-            Ezz(:,:,kk) = vzik+zik*zik'; % E((zz'|x_i,y_i,k)
+            % Ezz(:,:,kk) = vzik+zik*zik'; % E((zz'|x_i,y_i,k)
 			%% M-step %%
 			GzzSample = zeros(d+1, d+1) ;
-			GzzSample(1:d, 1:d) = Gk(indexSample) * Ezz(:,:,kk) ;
+			%% for the sake of parallel computing
+			%% omit the use of explicit Ezz
+			GzzSample(1:d, 1:d) = Gk(indexSample) * (vzik+zik*zik') ; % Ezz(:,:,kk) ;
 			GzzSample(1+d, 1:d) = Gk(indexSample) * Ez(indexSample, :, kk) ;
 			GzzSample(1:d, 1+d) = Gk(indexSample) * Ez(indexSample, :, kk) ;
 			GzzSample(1+d, 1+d) = Gk(indexSample) ;
