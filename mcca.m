@@ -94,14 +94,12 @@ for jj=1:cyc
 		%% update Vxy
 		Vxy(:,:,kk) = VxyPar ;
 		%% ensure the validity of Vxy: semi-definite and symmetric
+		%% but don't change the eigenvectors
 		if det(Vxy(:,:,kk)) < eps
-			row = sum(Vxy(:,:,kk), 2) ;
-			rowSumMin = min(row) ;
-			column = sum(Vxy(:,:,kk), 1) ;
-			columnSumMin = min(column) ;
-			addOn = max(rowSumMin, columnSumMin) ;
-			if addOn < 0
-				Vxy(:,:,kk) = Vxy(:,:,kk) - addOn * eye(mm+nn) ;
+			rowSum = sum(Vxy(:,:,kk), 2) ;
+			increment = -min(rowSum) ;
+			if increment > 0
+				Vxy(:,:,kk) = Vxy(:,:,kk) + increment * eye(mm+nn) + eps * eye(mm+nn);
 			end
 		end
         Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));

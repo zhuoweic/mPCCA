@@ -31,7 +31,7 @@ disp('***** generating GMM models *****') ;
 dimX = size(meanX, 2) ;
 dimY = size(meanY, 2) ;
 %% meanV: dimV x numComponents
-meanV = cat(meanX, meanY, 2)' ;
+meanV = cat(2, meanX, meanY)' ;
 dimV = size(meanV, 1) ;
 %% varV: dimV x dimV x numComponents
 varV = zeros(dimV, dimV, size(numWords)) ;
