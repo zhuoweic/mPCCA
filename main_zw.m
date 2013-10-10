@@ -1,5 +1,5 @@
 clc;
-clear;
+clear all;
 addpath('/nfs/zhuowei/matlibs/mPCCA') ;
 cd /nfs/pengxj/code/DL_Encode
 addpath(genpath('src'));
