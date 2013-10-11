@@ -22,7 +22,7 @@ end
 %% Initialization
 alphaPower = 0.5 ;
 diagV = 1 ;
-sharedDim = 60 ;
+sharedDim = 40 ;
 numWords = 256 ;
 
 %% HMDB51 dataset evaluation
@@ -72,9 +72,24 @@ for isplit = 1 %:3
         end
     end
     all_fnames = [tr_fnames,ts_fnames];
-
+	
+	featuresTrainedHOG = sampled_features(:,1:72)' ;
+	numTransformHOG = 50 ;
+	featuresTrainedHOF = sampled_features(:,73:end)' ;
+	numTransformHOF = 50 ;
+	%% preprocessing on the features
+	disp('applying PCA on features') ;
+	[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
+	transformHOG = transformHOG(:, 1 : numTransformHOG) ;
+	principalHOG = transformHOG' * featuresTrainedHOG ;
+	
+	[transformHOF, ~, eigenHOF] = princomp(featuresTrainedHOF') ;
+	transformHOF = transformHOF(:, 1 : numTransformHOF) ;
+	principalHOF = transformHOF' * featuresTrainedHOF ;
+	
 	%% get Gaussian mixture model
-	gmModel = ccaVector(sampled_features(:,1:72)', sampled_features(:,73:end)', alphaPower, diagV,sharedDim, numWords) ;
+	gmModel = ccaVector(principalHOG, principalHOF, alphaPower, diagV,sharedDim, numWords) ;
+	save('/nfs/zhuowei/gmModel.mat', 'gmModel') ;
 	
 	for ii = 1:n_clips %
 		ii
@@ -85,9 +100,12 @@ for isplit = 1 %:3
 		
 		%% Extracting features (for ENCODING) %%
 		%% SIFT + GIST: jointFeature, dimV x samples
-
+		featuresCodedHOG = transformHOG' * stip(:, 8 : 79)' ;
+		featuresCodedHOF = transformHOF' * stip(:, 80, 169)' ;
+		jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;
+		
 		%FK a third-party program which encodes every image given a Gaussian Mixture model
-		allType_feas = FK(gmModel, jointFeature', alphaPower) ;
+		allType_feas = FK(gmModel, jointFeature, alphaPower) ;
 
 		%% apply classification
 		[cm,avg_acc] = classify_svm(allType_feas, trainIndex, typeIndex, 'KernelAverage', 'RBF'); 

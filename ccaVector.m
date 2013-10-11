@@ -39,21 +39,21 @@ for indexComponent = 1 : numWords
 	%% block matrix assignment
 	%% left top
 	varV(1 : dimX, 1 : dimX, indexComponent) = ...
-		transformX(indexComponent, :, :) * transformX(indexComponent, :, :)' + varX(:, :, indexComponent) ;
+		squeeze(transformX(indexComponent, :, :)) * squeeze(transformX(indexComponent, :, :))' + squeeze(varX(:, :, indexComponent)) ;
 	%% right top
 	varV(1 : dimX, 1 + dimX : dimY + dimX, indexComponent) = ...
-		transformX(indexComponent, :, :) * transformY(indexComponent, :, :)' ;
+		squeeze(transformX(indexComponent, :, :)) * squeeze(transformY(indexComponent, :, :))' ;
 	%% left bottom
 	%% transpose right top
 	varV(1 + dimX : dimY + dimX, 1 : dimX, indexComponent) = ...
 		varV(1 : dimX, 1 + dimX : dimY + dimX, indexComponent)' ;
 	%% right bottom
 	varV(1 + dimX  : dimY + dimX, 1 + dimX : dimY + dimX, indexComponent) = ...
-		transformY(indexComponent, :, :) * transformY(indexComponent, :, :)' + varY(:, :, indexComponent) ;
+		squeeze(transformY(indexComponent, :, :)) * squeeze(transformY(indexComponent, :, :))' + squeeze(varY(:, :, indexComponent)) ;
 	%% reserve only the diagonal elements
 	%% diagV: flag suggesting whether or not to only reserve the diagonal elements of variance matrix
 	if diagV == true
-		varV(:, :, indexComponent) = diag(diag(varV(:, :, indexComponent))) ;
+		varV(:, :, indexComponent) = diag(diag(squeeze(varV(:, :, indexComponent)))) ;
 	end
 end
 %% get the model

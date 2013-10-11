@@ -95,13 +95,13 @@ for jj=1:cyc
 		Vxy(:,:,kk) = VxyPar ;
 		%% ensure the validity of Vxy: semi-definite and symmetric
 		%% but don't change the eigenvectors
-		if det(Vxy(:,:,kk)) < eps
-			rowSum = sum(Vxy(:,:,kk), 2) ;
-			increment = -min(rowSum) ;
-			if increment > 0
-				Vxy(:,:,kk) = Vxy(:,:,kk) + increment * eye(mm+nn) + eps * eye(mm+nn);
-			end
-		end
+		% if det(Vxy(:,:,kk)) < eps
+			% rowSum = sum(Vxy(:,:,kk), 2) ;
+			% increment = -min(rowSum) ;
+			% if increment > 0
+				% Vxy(:,:,kk) = Vxy(:,:,kk) + increment * eye(mm+nn) + eps * eye(mm+nn);
+			% end
+		% end
         Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));
     end
    
@@ -110,7 +110,7 @@ for jj=1:cyc
     Pr = Pr.*sW;
     clear sW;
     
-    lik = sum(log(sum(Pr)));
+    lik = sum(log(sum(Pr))) / 10000;
     fprintf(' Likelihood %f (Cycle %d) \n', lik, jj);
     LL =[ LL ,lik ];
     oldlik =  likbase;
