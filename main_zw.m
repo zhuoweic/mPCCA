@@ -79,7 +79,7 @@ for isplit = 1 %:3
 	featuresTrainedHOF = sampled_features(:,73:end)' ;
 	numTransformHOF = 50 ;
 	%% preprocessing on the features
-	disp('applying PCA on features') ;
+	disp('***** applying PCA on features *****') ;
 	[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
 	transformHOG = transformHOG(:, 1 : numTransformHOG) ;
 	principalHOG = transformHOG' * featuresTrainedHOG ;
@@ -95,20 +95,24 @@ for isplit = 1 %:3
 	%% one fisher vector for each video
 	allType_feas = {} ;
 	for ii = 1:n_clips %
-		fprintf('encoding video clip: %04d/%04d', ii, n_clips) ;
+		fprintf('encoding video clip: %04d/%04d\n', ii, n_clips) ;
 		fid = fopen(all_fnames{ii},'r');  
         fseek(fid,8,'bof');
 		stip = fread(fid, [169,inf],'float');
 		fclose(fid);
 		
-		%% Extracting features (for ENCODING) %%
-		%% SIFT + GIST: jointFeature, dimV x samples
-		featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
-		featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
-		jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;
-		
-		%FK a third-party program which encodes every image given a Gaussian Mixture model
-		allType_feas{ii} = FK(gmModel, jointFeature', alphaPower) ;
+		%% checking validity of stip
+		if size(stip, 1) == 169
+			%% Extracting features (for ENCODING) %%
+			%% SIFT + GIST: jointFeature, dimV x samples
+			featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
+			featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
+			jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;			
+			%FK a third-party program which encodes every image given a Gaussian Mixture model
+			allType_feas{ii} = FK(gmModel, jointFeature', alphaPower) ;
+		else
+			allType_feas{ii} = ones(1, 2 * numWords * size(jointFeature, 1)) * (1 / 2 * numWords * size(jointFeature, 1)) ;
+		end
 	end
 	allType_feas = cat(1, allType_feas{:}) ;
 	
