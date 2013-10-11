@@ -1,4 +1,4 @@
-function gmModel = ccaVector(descrSIFT, descrGIST, alphaPower, diagV, sharedDim, numWords)
+function gmModel = ccaVector(descrSIFT, descrGIST, alphaPower, diagV, sharedDim, numWords, numIterations)
 %CCAVECTOR a driver program which call MCCA and FK program to generate CCA vectors
 %% codes: featureDim x numImages, encoded images as CCA vector codes
 
@@ -22,7 +22,7 @@ function gmModel = ccaVector(descrSIFT, descrGIST, alphaPower, diagV, sharedDim,
 %% Training CCA mixture models %%
 disp('***** training CCA mixture models *****') ;
 [transformX, transformY, meanX, meanY, varX, varY, weight] = ...
-	mcca(descrSIFT, descrGIST, sharedDim, numWords) ;
+	mcca(descrSIFT, descrGIST, sharedDim, numWords, numIterations) ;
 	
 %% Generating Gaussian Mixture Models%%
 disp('***** generating GMM models *****') ;
@@ -34,7 +34,9 @@ dimY = size(meanY, 2) ;
 meanV = cat(2, meanX, meanY)' ;
 dimV = size(meanV, 1) ;
 %% varV: dimV x dimV x numComponents
-varV = zeros(dimV, dimV, size(numWords)) ;
+varV = zeros(dimV, dimV, numWords) ;
+%% diagVarV: 1 x dimV x numComponents
+diagVarV = zeros(1, dimV, numWords) ;
 for indexComponent = 1 : numWords
 	%% block matrix assignment
 	%% left top
@@ -51,10 +53,13 @@ for indexComponent = 1 : numWords
 	varV(1 + dimX  : dimY + dimX, 1 + dimX : dimY + dimX, indexComponent) = ...
 		squeeze(transformY(indexComponent, :, :)) * squeeze(transformY(indexComponent, :, :))' + squeeze(varY(:, :, indexComponent)) ;
 	%% reserve only the diagonal elements
-	%% diagV: flag suggesting whether or not to only reserve the diagonal elements of variance matrix
-	if diagV == true
-		varV(:, :, indexComponent) = diag(diag(squeeze(varV(:, :, indexComponent)))) ;
-	end
+	diagVarV(1, :, indexComponent) = diag(squeeze(varV(:, :, indexComponent)))' ;
 end
-%% get the model
-gmModel = gmdistribution(meanV, varV, weight') ;
+
+%% get the model %%
+%% diagV: flag suggesting whether or not to only reserve the diagonal elements of variance matrix
+if diagV == true
+	gmModel = gmdistribution(meanV', diagVarV, weight') ;
+else
+	gmModel = gmdistribution(meanV', varV, weight') ;
+end

@@ -23,7 +23,8 @@ end
 alphaPower = 0.5 ;
 diagV = 1 ;
 sharedDim = 40 ;
-numWords = 256 ;
+numWords = 5 ;
+numIteration = 2 ;
 
 %% HMDB51 dataset evaluation
 data_path = fullfile('data','HMDB51');
@@ -88,11 +89,13 @@ for isplit = 1 %:3
 	principalHOF = transformHOF' * featuresTrainedHOF ;
 	
 	%% get Gaussian mixture model
-	gmModel = ccaVector(principalHOG, principalHOF, alphaPower, diagV,sharedDim, numWords) ;
+	gmModel = ccaVector(principalHOG, principalHOF, alphaPower, diagV,sharedDim, numWords, numIteration) ;
 	save('/nfs/zhuowei/gmModel.mat', 'gmModel') ;
 	
+	%% one fisher vector for each video
+	allType_feas = {} ;
 	for ii = 1:n_clips %
-		ii
+		fprintf('encoding video clip: %04d/%04d', ii, n_clips) ;
 		fid = fopen(all_fnames{ii},'r');  
         fseek(fid,8,'bof');
 		stip = fread(fid, [169,inf],'float');
@@ -100,16 +103,19 @@ for isplit = 1 %:3
 		
 		%% Extracting features (for ENCODING) %%
 		%% SIFT + GIST: jointFeature, dimV x samples
-		featuresCodedHOG = transformHOG' * stip(:, 8 : 79)' ;
-		featuresCodedHOF = transformHOF' * stip(:, 80, 169)' ;
+		featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
+		featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
 		jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;
 		
 		%FK a third-party program which encodes every image given a Gaussian Mixture model
-		allType_feas = FK(gmModel, jointFeature, alphaPower) ;
-
-		%% apply classification
-		[cm,avg_acc] = classify_svm(allType_feas, trainIndex, typeIndex, 'KernelAverage', 'RBF'); 
-		avg_acc
-		acc_mats(isplit) = avg_acc;
+		allType_feas{ii} = FK(gmModel, jointFeature', alphaPower) ;
 	end
+	allType_feas = cat(1, allType_feas{:}) ;
+	
+	%% apply classification
+	[cm,avg_acc] = classify_svm(allType_feas, trainIndex, typeIndex, 'KernelAverage', 'RBF'); 
+	fprintf('average accuracy for split#%d: ', isplit) ;
+	disp(avg_acc) ;
+	acc_mats(isplit) = avg_acc;
+
 end

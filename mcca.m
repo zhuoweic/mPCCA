@@ -110,7 +110,7 @@ for jj=1:cyc
     Pr = Pr.*sW;
     clear sW;
     
-    lik = sum(log(sum(Pr))) / 10000;
+    lik = sum(log(sum(Pr / 10000)));
     fprintf(' Likelihood %f (Cycle %d) \n', lik, jj);
     LL =[ LL ,lik ];
     oldlik =  likbase;
