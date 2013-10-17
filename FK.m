@@ -1,4 +1,4 @@
-function [EncodeMat]=FK(obj,features,alpha)
+function [EncodeMat]=FK(obj,features)
 EncodeMat=zeros(1,2*obj.NDimensions*obj.NComponents);
 P=posterior(obj,features);
 %% computing fisher vector %%
@@ -14,6 +14,6 @@ if ~isempty(features)
     end
 end
 %% power normalization %%
-EncodeMat=sign(EncodeMat).*(abs(EncodeMat).^alpha);
+% EncodeMat=sign(EncodeMat).*(abs(EncodeMat).^alpha);
 %% l2 normalization %%
-EncodeMat=EncodeMat./repmat(sum(EncodeMat.^2,2).^(0.5)+eps,[1,size(EncodeMat,2)]);
+% EncodeMat=EncodeMat./repmat(sum(EncodeMat.^2,2).^(0.5)+eps,[1,size(EncodeMat,2)]);

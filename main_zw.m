@@ -1,6 +1,5 @@
-clc;
-clear all;
-dbstop if error;
+clear;
+% dbstop if error;
 addpath('/nfs/zhuowei/matlibs/mPCCA') ;
 cd /nfs/pengxj/code/DL_Encode
 addpath(genpath('src'));
@@ -16,46 +15,68 @@ else
     addpath('/nfs/pengxj/code/my.toolbox');
     addpath('/nfs/pengxj/code/my.toolbox/libsvm-3.14/matlab');
     run('/nfs/pengxj/code/my.toolbox/vlfeat-0.9.15/toolbox/vl_setup');
+	run('/nfs/zhuowei/matlibs/vlfeat-0.9.17/toolbox/vl_setup.m') ;
     addpath('/nfs/pengxj/code/my.toolbox/vlfeat-0.9.15/toolbox/mex/mexglx');
 end
 
 %% Initialization
 alphaPower = 0.5 ;
 diagV = 1 ;
-sharedDim = 40 ;
-numWords = 5 ;
-numIteration = 2 ;
-
-%% HMDB51 dataset evaluation
+sharedDim = 45 ;
+%% number of components
+numWords = 256 ;
+numIteration = 5 ;
+numFeaturesPerWord = 10000 ;
+%% PCA dimensions
+numTransformHOG = 48 ;
+numTransformHOF = 54 ;
+%% modelling method
+% method = 'fv' ;
+method = 'cca' ;
+%% features used
+featureEmployed = [1 0] ; % use HOG only
+%% HMDB51 dataset preparation
 data_path = fullfile('data','HMDB51');
 splitdir = fullfile('data','HMDB51_TestTrain_7030_splits');
-%% Training Configuration
 filenames = textread(['data', slash, 'HMDB_files.txt'], '%s');
-for isplit = 1
+classRange = 51 ;
+
+%% Encoding & Classification
+for isplit = 1 : 3
+	fprintf('***** processing dataset: %02d/%02d *****\n', isplit, 3) ;
+	%% reading training clips
     [train_fnames,test_fnames,saction]= get_HMDB_split(isplit,splitdir);
     sv_path = fullfile('res', 'HMDB51',['stip_sampled_features_HMDB_split' num2str(isplit), '.mat']);
     if ~exist(sv_path,'file')
-        sampled_features = sampling_stip_HMDB(data_path,train_fnames, 100000);
+        sampled_features = sampling_stip_HMDB(data_path,train_fnames, numFeaturesPerWord * numWords);
         save(sv_path,'sampled_features');
     else
         load(sv_path);
     end
-end
-%% Training Samples:
-%% HOG-sampled_features(:,1:72)
-%% HOF-sampled_features(:,73:end)
+	%% split training features
+	featuresTrainedHOG = sampled_features(:,1:72)' ;
+	featuresTrainedHOF = sampled_features(:,73:end)' ;
+	%% preprocessing on the features
+	disp('***** applying PCA on features *****') ;
+	%% HOG-sampled_features(:,1:72)
+	[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
+	transformHOG = transformHOG(:, 1 : numTransformHOG) ;
+	%% PCA-HOG
+	principalHOG = transformHOG' * featuresTrainedHOG ;
+	%% HOF-sampled_features(:,73:end)
+	[transformHOF, ~, eigenHOF] = princomp(featuresTrainedHOF') ;
+	transformHOF = transformHOF(:, 1 : numTransformHOF) ;
+	%% PCA-HOF
+	principalHOF = transformHOF' * featuresTrainedHOF ;
 
-
-%% Encoding & Classification
-for isplit = 1 %:3
-	%% prepare training and testing data
+	%% prepare training and testing ground truth
     [train_fnames,test_fnames,saction]= get_HMDB_split(isplit,splitdir);
     n_trclips = length(train_fnames)*length(train_fnames{1}); 
 	n_tsclips = length(test_fnames)*length(test_fnames{1});
     n_clips = n_trclips + n_tsclips; 
 	trainIndex = zeros(n_clips,1); 
 	typeIndex = trainIndex;
-	
+	%% configuring ground truth: training
     for ii = 1:length(train_fnames) %
         tmp = train_fnames{ii};
         for jj = 1:70
@@ -64,7 +85,7 @@ for isplit = 1 %:3
             trainIndex((ii-1)*70 + jj) = 1; typeIndex((ii-1)*70 + jj) = ii;
         end
     end
-	
+	%% configuring ground truth: testing	
     for ii = 1:length(test_fnames) %
         tmp = test_fnames{ii};
         for jj = 1:30
@@ -73,53 +94,101 @@ for isplit = 1 %:3
         end
     end
     all_fnames = [tr_fnames,ts_fnames];
-	
-	featuresTrainedHOG = sampled_features(:,1:72)' ;
-	numTransformHOG = 50 ;
-	featuresTrainedHOF = sampled_features(:,73:end)' ;
-	numTransformHOF = 50 ;
-	%% preprocessing on the features
-	disp('***** applying PCA on features *****') ;
-	[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
-	transformHOG = transformHOG(:, 1 : numTransformHOG) ;
-	principalHOG = transformHOG' * featuresTrainedHOG ;
-	
-	[transformHOF, ~, eigenHOF] = princomp(featuresTrainedHOF') ;
-	transformHOF = transformHOF(:, 1 : numTransformHOF) ;
-	principalHOF = transformHOF' * featuresTrainedHOF ;
-	
+		
+	disp('***** training GMM *****') ;
 	%% get Gaussian mixture model
-	gmModel = ccaVector(principalHOG, principalHOF, alphaPower, diagV,sharedDim, numWords, numIteration) ;
-	save('/nfs/zhuowei/gmModel.mat', 'gmModel') ;
+	if (strcmp(method, 'cca') == true)
+		disp('***** using CCA model *****') ;
+		%% CCA
+		[meanV, diagVarV, weight] = ccaVector(principalHOG, principalHOF, alphaPower, diagV, sharedDim, numWords, numIteration) ;
+	else
+		%% fisher vector modeling
+		disp('***** using FV model *****')
+		[meanV, diagVarV, weight] = vl_gmm([principalHOG ; principalHOF], numWords, 'verbose', 'MaxNumIterations', numIteration) ;
+	end
+	%% saving gaussian mixture model
+	% save('/nfs/zhuowei/gmModel.mat', 'gmModel') ;
 	
 	%% one fisher vector for each video
-	allType_feas = {} ;
-	for ii = 1:n_clips %
-		fprintf('encoding video clip: %04d/%04d\n', ii, n_clips) ;
+	allType_feas = ones(2 * numWords * (numTransformHOG + numTransformHOF), n_clips) ;
+	%% encode images
+	disp('***** encoding images *****') ;
+	parfor ii = 1:n_clips %
+		% fprintf('encoding video clip: %04d/%04d\n', ii, n_clips) ;
 		fid = fopen(all_fnames{ii},'r');  
         fseek(fid,8,'bof');
 		stip = fread(fid, [169,inf],'float');
 		fclose(fid);
 		
-		%% checking validity of stip
+		%% checking validity of STIP
 		if size(stip, 1) == 169
 			%% Extracting features (for ENCODING) %%
-			%% SIFT + GIST: jointFeature, dimV x samples
 			featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
 			featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
+			%% SIFT + GIST: jointFeature, dimV x samples
 			jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;			
-			%FK a third-party program which encodes every image given a Gaussian Mixture model
-			allType_feas{ii} = FK(gmModel, jointFeature', alphaPower) ;
+			%% using original fisher vector
+			allType_feas(:, ii) = FK(gmdistribution(meanV, diagVarV, weight), jointFeature') ;
+			%% using improved fisher vector
+			% allType_feas(:, ii) = vl_fisher(jointFeature, meanV, diagVarV, weight, 'Improved') ;
 		else
-			allType_feas{ii} = ones(1, 2 * numWords * size(jointFeature, 1)) * (1 / 2 * numWords * size(jointFeature, 1)) ;
+			%% some missing data
+			%% using uniform distribution
+			allType_feas(:, ii) = allType_feas(:, ii) / (2 * numWords * (numTransformHOG + numTransformHOF)) ;
 		end
 	end
-	allType_feas = cat(1, allType_feas{:}) ;
-	
-	%% apply classification
-	[cm,avg_acc] = classify_svm(allType_feas, trainIndex, typeIndex, 'KernelAverage', 'RBF'); 
-	fprintf('average accuracy for split#%d: ', isplit) ;
-	disp(avg_acc) ;
-	acc_mats(isplit) = avg_acc;
+	% allType_feas = cat(1, allType_feas{:}) ;
 
+	%% saving codes
+	% save('/nfs/zhuowei/actionCodes.mat', 'allType_feas') ;
+
+	%% split train/test dataset
+	train = find(trainIndex == 1) ;
+	test = find(trainIndex == 0) ;
+
+	%% SVM classification %%
+	%% parameters initialization
+	C = 100 ;
+	lambda = 1 / (C * numel(train)) ;
+	par = {'Solver', 'sdca', 'Verbose', ...				
+		   'BiasMultiplier', 1, ...
+		   'Epsilon', 0.001, ...
+		   'MaxNumIterations', 100 * numel(train)} ;
+
+	scores = cell(1, classRange) ;	% predict scores
+	ap = zeros(1, classRange) ;		% average precision
+	w = cell(1, classRange) ;		% svm weight
+	b = cell(1, classRange) ;		% svm shift
+	%% apply classification	
+	for classIndex = 1 : classRange
+		fprintf('classifying type: %02d/%02d\n', classIndex, classRange) ;
+		classLabel = 2 * (typeIndex == classIndex) - 1 ;
+		[w{classIndex},b{classIndex}] = vl_svmtrain(allType_feas(:,train), classLabel(train), lambda, par{:}) ;
+		scores{classIndex} = transpose(w{classIndex}) * allType_feas + b{classIndex} ;
+
+		%% computing precision-recall curve
+		%% note the old standard of average precision calculation method: ap11
+		[~,~,info] = vl_pr(classLabel(test), scores{classIndex}(test)) ;
+		ap(classIndex) = info.ap ;
+	end
+	scores = cat(1,scores{:}) ;
+
+	% [cm,avg_acc] = svmZW(allType_feas', trainIndex, typeIndex, 'KernelAverage', 'RBF'); 
+	[~,preds] = max(scores, [], 1) ;
+	confusion = zeros(classRange) ;
+	for classIndex = 1 : classRange
+		sel = find(typeIndex == classIndex & trainIndex == 0) ;
+		tmp = accumarray(preds(sel)', 1, [classRange 1]) ;
+		tmp = tmp / max(sum(tmp),1e-10) ;
+		confusion(classIndex,:) = tmp(:)' ;
+	end
+	
+	avgAccuracy = mean(diag(confusion)) ;
+	fprintf('average accuracy for split#%d: ', isplit) ;
+	disp(avgAccuracy) ;
+	acc_mats(isplit) = avgAccuracy ;
 end
+
+disp('Average Performance on HMDB51: ') ;
+disp(mean(acc_mats)) ;
+disp(acc_mats) ;

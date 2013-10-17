@@ -9,7 +9,6 @@
 %x = Wx * z + Mux
 %y = Wy * z + Muy
 
-
 % Wx (K x nn x d): transformation matrix for x
 % Wy (K x mm x d): transformation matrix for y
 % Mux ((K x nn):  mean for transformation x 
@@ -20,12 +19,12 @@
 
 % LL - log likelihood curve
 
-% Iterates until a proportional change < tol in the log likelihood 
-% or cyc steps of EM 
+% Iterates until a proportional change < tolerance(tol) in the log likelihood 
+% or cycles(cyc) steps of EM 
 
 function [Wx, Wy, Mux, Muy, Psix, Psiy, Wi, LL] = mcca(X, Y, d,K,cyc,tol, diagV, sharCov)
-if nargin<8   sharCov=0; end; % using shared covariance matrices
-if nargin<7   diagV=1; end; % using diagonal covariance matrices Psix Psiy
+if nargin<8   sharCov=0; end; 	%% using shared covariance matrices
+if nargin<7   diagV=1; end; 	%% using diagonal covariance matrices Psix Psiy
 if nargin<6   tol=0.0001; end;
 if nargin<5   cyc=100; end;
 if nargin<4   K=2; end;
@@ -33,14 +32,15 @@ if nargin<3   d=1; end;
 
 [nn, N]= size(X);
 mm = size(Y, 1);
-
+%% control randomness
 rng('default') ;
-
+%% diagonal augment for singular covariance matrix
 tiny=exp(-200);
+Ttd1 = eye(d+1)*tiny;
+%% log likelihood
 LL=[];
 Id=eye(d);
-Ttd1 = eye(d+1)*tiny;
-%initialize parameters: Wx, Wy,  Mux, Muy, Psix, Psiy, Wi
+%% initialize parameters: Wx, Wy,  Mux, Muy, Psix, Psiy, Wi
 mX = mean(X, 2);
 cX = cov(X');
 mY = mean(Y, 2);
@@ -50,10 +50,10 @@ scale=exp(2*sum(log(diag(chol(cX))))/nn);
 Wx=randn(K , nn , d)*sqrt(scale/d);
 scale=exp(2*sum(log(diag(chol(cY))))/mm);
 Wy=randn(K , mm , d)*sqrt(scale/d);
-Psix = zeros( nn , nn , K);
-Psiy = zeros( mm , mm , K);
+Psix = zeros(nn , nn , K);
+Psiy = zeros(mm , mm , K);
 
-for i=1:K
+for i=1 : K
     Mux(i, :) = mX;
     Muy(i, :) = mY;
     Psix(:,:,i) = diag(diag(cX))+tiny;
@@ -62,11 +62,12 @@ end
 Mux = Mux + randn(K, nn)*sqrtm(cX);
 Muy = Muy + randn(K, mm)*sqrtm(cY);
 
-%initialize hidden parameters
-G=zeros(N, K); %posterior probabilties  p(k|x_i)
-Ez = zeros(N,d,K);  % E(z_{i,k})
+%% initialize hidden parameters
+G = zeros(N, K); 		%% posterior probabilties  p(k|x_i)
+Ez = zeros(N,d,K);  	%% E(z_{i,k})
+
 % Ezz = zeros(d,d, K);  % E(z_{i,k}z_{i,k}')
-%Vzz = zeros(d,d,K);
+% Vzz = zeros(d,d,K);
 
 Vxy  = zeros(mm+nn, mm+nn, K);
 Wi = ones(K,1)/K;
@@ -74,16 +75,21 @@ Wi = ones(K,1)/K;
 XY =[X; Y]';
 
 likbase = 0;
+
 %% EM Training of CCA
 fprintf('\n Begin EN training\n');
-for jj=1:cyc
+%% iterations
+for jj = 1 : cyc
     fprintf(' EM Step %d \n', jj);
-    %parameters for p(v|k)
-    
+	%% initialize total mean
     Muz = [Mux, Muy];
+    %% initialize p(v|k)
     Pr = zeros(K, N);
-    parfor kk=1:K
+	%% initialize variance matrix for every component
+    parfor kk = 1 : K
+		%% transformation for x -> z
         Wxk = squeeze(Wx(kk,:,:));
+		%% transformation for y -> z
         Wyk = squeeze(Wy(kk,:,:));
 		%% VxyPar is an ad-hoc designed solution for parallel running
 		VxyPar = zeros(mm+nn) ;
@@ -91,8 +97,10 @@ for jj=1:cyc
         VxyPar(1+nn:mm+nn,1+nn:mm+nn) = Wyk*Wyk' + squeeze(Psiy(:,:,kk));
         VxyPar(1:nn,1+nn:mm+nn) = Wxk*Wyk';
         VxyPar(1+nn:mm+nn,1:nn) = Wyk*Wxk';
-		%% update Vxy
+		%% update Vxy: variance for kth component
 		Vxy(:,:,kk) = VxyPar ;
+		%% p(v_{n}|k)
+        Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));
 		%% ensure the validity of Vxy: semi-definite and symmetric
 		%% but don't change the eigenvectors
 		% if det(Vxy(:,:,kk)) < eps
@@ -102,7 +110,6 @@ for jj=1:cyc
 				% Vxy(:,:,kk) = Vxy(:,:,kk) + increment * eye(mm+nn) + eps * eye(mm+nn);
 			% end
 		% end
-        Pr(kk, :) = mvnpdf(XY, Muz(kk,:,:), squeeze(Vxy(:,:,kk)));
     end
    
     %calculate likelihood
@@ -110,7 +117,7 @@ for jj=1:cyc
     Pr = Pr.*sW;
     clear sW;
     
-    lik = sum(log(sum(Pr / 10000)));
+    lik = sum(log(sum(Pr)));
     fprintf(' Likelihood %f (Cycle %d) \n', lik, jj);
     LL =[ LL ,lik ];
     oldlik =  likbase;

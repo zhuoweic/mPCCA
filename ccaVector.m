@@ -1,4 +1,4 @@
-function gmModel = ccaVector(descrSIFT, descrGIST, alphaPower, diagV, sharedDim, numWords, numIterations)
+function [meanV, diagVarV, weight] = ccaVector(descrSIFT, descrGIST, alphaPower, diagV, sharedDim, numWords, numIterations)
 %CCAVECTOR a driver program which call MCCA and FK program to generate CCA vectors
 %% codes: featureDim x numImages, encoded images as CCA vector codes
 
@@ -33,11 +33,12 @@ dimY = size(meanY, 2) ;
 %% meanV: dimV x numComponents
 meanV = cat(2, meanX, meanY)' ;
 dimV = size(meanV, 1) ;
-%% varV: dimV x dimV x numComponents
-varV = zeros(dimV, dimV, numWords) ;
 %% diagVarV: 1 x dimV x numComponents
 diagVarV = zeros(1, dimV, numWords) ;
-for indexComponent = 1 : numWords
+parfor indexComponent = 1 : numWords
+	%% varV: dimV x dimV x numComponents
+	%% for the sake of parallel computing
+	varV = zeros(dimV, dimV, numWords) ;
 	%% block matrix assignment
 	%% left top
 	varV(1 : dimX, 1 : dimX, indexComponent) = ...
@@ -58,8 +59,5 @@ end
 
 %% get the model %%
 %% diagV: flag suggesting whether or not to only reserve the diagonal elements of variance matrix
-if diagV == true
-	gmModel = gmdistribution(meanV', diagVarV, weight') ;
-else
-	gmModel = gmdistribution(meanV', varV, weight') ;
-end
+%% default using only diagonal (or else FK.m will fail to take effect)
+diagVarV = squeeze(diagVarV) ;
