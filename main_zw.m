@@ -24,15 +24,15 @@ alphaPower = 0.5 ;
 diagV = 1 ;
 sharedDim = 45 ;
 %% number of components
-numWords = 256 ;
-numIteration = 5 ;
+numWords = 64 ;
+numIteration = 100 ;
 numFeaturesPerWord = 10000 ;
 %% PCA dimensions
 numTransformHOG = 48 ;
 numTransformHOF = 54 ;
 %% modelling method
-% method = 'fv' ;
-method = 'cca' ;
+method = 'fv' ;
+% method = 'cca' ;
 %% features used
 featureEmployed = [1 0] ; % use HOG only
 %% HMDB51 dataset preparation
@@ -128,7 +128,7 @@ for isplit = 1 : 3
 			%% SIFT + GIST: jointFeature, dimV x samples
 			jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;			
 			%% using original fisher vector
-			allType_feas(:, ii) = FK(gmdistribution(meanV, diagVarV, weight), jointFeature') ;
+			allType_feas(:, ii) = FK(gmdistribution(meanV', reshape(diagVarV, [1 size(diagVarV)]), weight), jointFeature') ;
 			%% using improved fisher vector
 			% allType_feas(:, ii) = vl_fisher(jointFeature, meanV, diagVarV, weight, 'Improved') ;
 		else
