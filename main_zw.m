@@ -30,12 +30,18 @@ numFeaturesPerWord = 10000 ;
 %% PCA dimensions
 numTransformHOG = 48 ;
 numTransformHOF = 54 ;
+
+%% control variates %%
 %% coding method
 codingMethod = 'fv' ;
 % codingMethod = 'cca' ;
 %% fusion method
 % fusionMethod = 'early' ;
 fusionMethod = 'late' ;
+%% dimension reduction method
+PCAMethod = 'joint' ;
+% PCAMethod = 'seperate' ;
+
 %% features used
 featureEmployed = [1 0] ; % use HOG only
 %% HMDB51 dataset preparation
@@ -61,16 +67,23 @@ for isplit = 1 : 3
 	featuresTrainedHOF = sampled_features(:,73:end)' ;
 	%% preprocessing on the features
 	disp('***** applying PCA on features *****') ;
-	%% HOG-sampled_features(:,1:72)
-	[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
-	transformHOG = transformHOG(:, 1 : numTransformHOG) ;
-	%% PCA-HOG
-	principalHOG = transformHOG' * featuresTrainedHOG ;
-	%% HOF-sampled_features(:, 73 : end)
-	[transformHOF, ~, eigenHOF] = princomp(featuresTrainedHOF') ;
-	transformHOF = transformHOF(:, 1 : numTransformHOF) ;
-	%% PCA-HOF
-	principalHOF = transformHOF' * featuresTrainedHOF ;
+	if strcmp(PCAMethod, 'joint')
+		[transformV, ~, eigenV] = princomp(sampled_features) ;
+		transformV = transformV(:, 1 : numTransformHOG + numTransformHOF) ;
+		%% PCA-V
+		principalV = transformV' * sampled_features ;
+	else
+		%% HOG-sampled_features(:,1:72)
+		[transformHOG, ~, eigenHOG] = princomp(featuresTrainedHOG') ;
+		transformHOG = transformHOG(:, 1 : numTransformHOG) ;
+		%% PCA-HOG
+		principalHOG = transformHOG' * featuresTrainedHOG ;
+		%% HOF-sampled_features(:, 73 : end)
+		[transformHOF, ~, eigenHOF] = princomp(featuresTrainedHOF') ;
+		transformHOF = transformHOF(:, 1 : numTransformHOF) ;
+		%% PCA-HOF
+		principalHOF = transformHOF' * featuresTrainedHOF ;
+	end
 	
 	%% prepare training and testing ground truth
     [train_fnames,test_fnames,saction]= get_HMDB_split(isplit,splitdir);
@@ -100,7 +113,11 @@ for isplit = 1 : 3
 		
 	disp('***** training GMM *****') ;
 	%% get Gaussian mixture model
-	if (strcmp(codingMethod, 'cca') && strcmp(fusionMethod, 'early'))
+	if strcmp(PCAMethod, 'joint')
+		disp('***** using joint PCA features *****') ;
+		disp('***** using early FV model *****') ;
+		[meanV, diagVarV, weight] = vl_gmm(principalV, numWords, 'verbose', 'MaxNumIterations', numIteration) ;		
+	elseif (strcmp(codingMethod, 'cca') && strcmp(fusionMethod, 'early'))
 		disp('***** using early CCA model *****') ;
 		%% CCA
 		[meanV, diagVarV, weight] = ccaVector(principalHOG, principalHOF, alphaPower, diagV, sharedDim, numWords, numIteration) ;
@@ -130,20 +147,26 @@ for isplit = 1 : 3
 		
 		%% checking validity of STIP
 		if size(stip, 1) == 169
-			%% Extracting features (for ENCODING) %%
-			featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
-			featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
-			if strcmp(fusionMethod, 'early')
-				%% SIFT + GIST: jointFeature, dimV x samples
-				jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;			
-				%% using original fisher vector
-				% allType_feas(:, ii) = fisherVector(gmdistribution(meanV', reshape(diagVarV, [1 size(diagVarV)]), weight), jointFeature') ;
-				%% using improved fisher vector
-				allType_feas(:, ii) = vl_fisher(jointFeature, meanV, diagVarV, weight, 'Improved') ;
-			elseif strcmp(fusionMethod, 'late')
-				fvHOG = vl_fisher(featuresCodedHOG, meanHOG, diagVarHOG, weightHOG, 'Improved') ;
-				fvHOF = vl_fisher(featuresCodedHOF, meanHOF, diagVarHOF, weightHOF, 'Improved') ;
-				allType_feas(:, ii) = [fvHOG ; fvHOF] ;
+			if strcmp(PCAMethod, 'joint')
+				%% Extracting jointly PCAed features (for ENCODING) %%
+				featuresCodedV = transformV' * stip(8 : 169, :) ;
+				allType_feas(:, ii) = vl_fisher(featuresCodedV, meanV, diagVarV, weight, 'Improved') ;				
+			else
+				%% Extracting separated PCAed features (for ENCODING) %%
+				featuresCodedHOG = transformHOG' * stip(8 : 79, :) ;
+				featuresCodedHOF = transformHOF' * stip(80 :  169, :) ;
+				if strcmp(fusionMethod, 'early')
+					%% SIFT + GIST: jointFeature, dimV x samples
+					jointFeature = [featuresCodedHOG ; featuresCodedHOF] ;			
+					%% using original fisher vector
+					% allType_feas(:, ii) = fisherVector(gmdistribution(meanV', reshape(diagVarV, [1 size(diagVarV)]), weight), jointFeature') ;
+					%% using improved fisher vector
+					allType_feas(:, ii) = vl_fisher(jointFeature, meanV, diagVarV, weight, 'Improved') ;
+				elseif strcmp(fusionMethod, 'late')
+					fvHOG = vl_fisher(featuresCodedHOG, meanHOG, diagVarHOG, weightHOG, 'Improved') ;
+					fvHOF = vl_fisher(featuresCodedHOF, meanHOF, diagVarHOF, weightHOF, 'Improved') ;
+					allType_feas(:, ii) = [fvHOG ; fvHOF] ;
+				end
 			end
 		else
 			%% some missing data
